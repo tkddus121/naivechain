@@ -53,6 +53,7 @@ var getGenesisBlock = () => {
 };
 
 var memPool = [];
+var UTXOsets = [];
 
 var initMemPool = () => {
     memPool.push({transactionHash:"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",in_counter:1,inputs:
@@ -95,6 +96,8 @@ var initHttpServer = () => {
         var tmp = isValidTransaction(req.body);
         if(tmp){
             // add new transaction to memPool
+            addToMempool(req.body);
+            addToUTXO(req.body);
             res.send("Valid Transaction");
         }
         else{
@@ -107,6 +110,7 @@ var initHttpServer = () => {
         var tmp = isValidNewBlock(req.body,blockchain[0]);
         if(tmp){
             // add new block to blockchain
+            // add outputs to UTXO set
             res.send("Valid Block");
         }
         else{
@@ -115,7 +119,14 @@ var initHttpServer = () => {
     });
     app.listen(http_port, () => console.log('Listening http on port: ' + http_port));
 };
-
+var addToMempool = (newTransaction) => {
+    memPool.push({transactionHash:newTransaction.transactionHash,in_counter:newTransaction.in_counter,inputs:
+    newTransaction.inputs,out_counter:
+    newTransaction.out_counter,outputs:newTransaction.outputs});
+}
+var addToUTXO = (newTransaction) => {
+    UTXOsets.push(newTransaction.outputs);
+}
 var isValidTransaction = (newTransaction) => {
     // check if every data field are non-empty
     if (newTransaction.transactionHash == null || // 나중에 제거하기
@@ -123,26 +134,33 @@ var isValidTransaction = (newTransaction) => {
         newTransaction.inputs == null || 
         newTransaction.out_counter == null ||
          newTransaction.outputs == null) {
+        console.log("Invalid transacion format");
         return false;
     }
 
     // check if is there any negative outputs
     for(var i=0; i<newTransaction.out_counter; i++ ){
-        if(newTransaction.outputs[i].value < 0)
+        if(newTransaction.outputs[i].value < 0){
+            console.log("Negative output");
             return false;
+        }
     }
 
     // 0 < sum of outputs < 21,000,000
     var sum = 0;
     for(var i=0; i<newTransaction.out_counter; i++ )
         sum += newTransaction.outputs[i].value;    
-    if(sum<=0||sum>21000000)
+    if(sum<=0||sum>21000000){
+        console.log("Sum of outputs must be 0 ~ 21,000,000")
         return false;
+    }
 
     // check if hash is 0 and sequence(index) is negative
     for(var i=0; i<newTransaction.in_counter; i++ ){   
-        if(newTransaction.inputs[i].txid == "0" || newTransaction.inputs[i].sequence < 0)   
+        if(newTransaction.inputs[i].txid == "0" || newTransaction.inputs[i].sequence < 0)   {
+            
             return false;
+        }
     }
     
     
