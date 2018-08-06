@@ -4,6 +4,19 @@ var express = require("express");
 var bodyParser = require('body-parser');
 var WebSocket = require("ws");
 
+//teamTx
+
+let elliptic = require('elliptic');
+let sha3 = require('js-sha3');
+let ec = new elliptic.ec('secp256k1');
+
+let keyPair = ec.genKeyPair();
+let privKey = keyPair.getPrivate("hex");
+let pubKey = keyPair.getPublic();
+
+//
+
+
 var http_port = process.env.HTTP_PORT || 3001;
 var p2p_port = process.env.P2P_PORT || 6001;
 var initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
@@ -22,9 +35,28 @@ class Block {   // 수정 요망
     }
 }
 
+
+var TransactionPool = new Array();
+
 class Transaction {
-    constructor(transactionHash,in_counter, inputs, out_counter, outputs) {   // 수정 요망
-        this.in_counter = in_counter;
+    constructor(sender, receiver, value, pubKey, in_counter, out_counter, transactionHash, inputs, outputs) {   // 수정 요망
+        
+        //transactionHash,in_counter, inputs, out_counter, outputs
+        this.sender = sender;
+        this.receiver = receiver;
+        this.value = value;
+        
+        this.in_counter = in_counter; // self initialize
+
+        this.out_counter = out_counter;
+        
+        this.msgHash = NaN;
+        //tx 발생자의 개인 서명, 잠금스크립트를 풀기위한 열쇠.
+        this.Sig = NaN;
+        //tx를 검증하고 서명을 확인한다.자물쇠의 역할
+        this.pubKey = pubKey;
+
+        //teamTx        
         for(var i=0; i<in_counter; i++){
             this.inputs[i].txid = inputs[i].txid.toString();
             this.inputs[i].sequence = inputs[i].sequence;
@@ -33,19 +65,24 @@ class Transaction {
             this.outputs[i].value = outputs[i].value;
             this.outputs[i].sig = outputs[i].sig.toString();
         }
-        this.out_counter = out_counter;
         this.outputs = [outputs];
         //this.transactionHash = CryptoJS.SHA256(in_counter + [inputs] + out_counter + [outputs]).toString();
         //calculate transaction hash directly, not using passed parameter
         this.transactionHash = transactionHash.toString();
+
     }
 }
+
+
+ 
 
 var sockets = [];
 var MessageType = {
     QUERY_LATEST: 0,
     QUERY_ALL: 1,
-    RESPONSE_BLOCKCHAIN: 2
+    RESPONSE_BLOCKCHAIN: 2,
+    RESPONSE_Transaction: 3
+
 };
 
 var getGenesisBlock = () => {
@@ -92,6 +129,8 @@ var initHttpServer = () => {
         connectToPeers([req.body.peer]);
         res.send();
     });
+
+    /*
     app.post('/newTransaction', (req, res) => {
         var tmp = isValidTransaction(req.body);
         if(tmp){
@@ -105,6 +144,46 @@ var initHttpServer = () => {
         }
     });
 
+*/
+    //teamTx
+   app.get('/transactions', (req, res) => res.send(JSON.stringify(TransactionPool)));
+    app.post('/newTransaction', (req, res) => {
+        var newSender = req.body.sender;
+        var newReceiver = req.body.receiver;
+        var newValue = req.body.value;
+
+        var newpubKey= req.body.pubKey;
+        var newin_counter= req.body.in_counter;
+        var newout_counter= req.body.out_counter;
+        var newtransactionHash= req.body.transactionHash;
+        var newinputs= req.body.inputs;
+        var newoutputs= req.body.outputs;
+
+
+
+        var newTransaction = generateNewTransaction(newSender, newReceiver, newValue, pubKey, newin_counter, newout_counter, newtransactionHash, newinputs, newoutputs);
+
+        //해쉬값에 뭐넣어야 되는거죠 ...??,원본 메시지를 뭘로할까여;
+        let msgHash = sha3.keccak256("what should we put here?????????");
+
+        newTransaction.msgHash = msgHash;
+        let signature = ec.sign(msgHash, privKey, "hex", { canonical: true });
+        newTransaction.Sig = signature;
+        newTransaction.pubKey = pubKey;
+
+        //tx풀에 추가.
+        addTransaction(newTransaction);
+
+        broadcast(responseTxMsg());
+        console.log('New Tx: ' + JSON.stringify(newTransaction));
+
+        //이거랑 res.send()차이 머징;
+        //res.end();
+
+        res.send();
+    });
+
+   
     //삭제 요망
     app.post('/isValidNewBlock', (req, res) => {
         var tmp = isValidNewBlock(req.body,blockchain[0]);
@@ -117,6 +196,8 @@ var initHttpServer = () => {
             res.send("Invalid Block");
         }
     });
+
+    
     app.listen(http_port, () => console.log('Listening http on port: ' + http_port));
 };
 var addToMempool = (newTransaction) => {
@@ -235,6 +316,12 @@ var initMessageHandler = (ws) => {
             case MessageType.RESPONSE_BLOCKCHAIN:
                 handleBlockchainResponse(message);
                 break;
+            case MessageType.RESPONSE_Transaction:
+                handleTxResponse(message);
+                break;
+                //mm
+
+                
         }
     });
 };
@@ -258,6 +345,12 @@ var generateNextBlock = (blockData) => {
     return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash, "0547e56d1e434eca972617295fe28c69a4e32b259009c261952130078608371ac", 34583);
 };
 
+//teamTx
+
+var generateNewTransaction = (sender, receiver, amount, pubKey, in_counter, out_counter, transactionHash, inputs, outputs) => {
+    var aTransaction = new Transaction(sender, receiver, amount, pubKey, in_counter, out_counter, transactionHash, inputs, outputs); // TxHash, input_counter,inputs, output_counter, outputs
+    return aTransaction;
+};
 
 var calculateHashForBlock = (block) => {
     return calculateHash(block.index, block.previousHash, block.timestamp, block.data, block.difficulty, block.nonce);
@@ -273,7 +366,12 @@ var addBlock = (newBlock) => {
     }
 };
 
-
+//teamTx
+var addTransaction = (newTransaction) => {
+    //if( isValidNewTransaction(newTransaction) ){
+    TransactionPool.push(newTransaction);
+    //}
+}
 
 var isValidNewBlock = (newBlock, previousBlock) => {
     console.log(newBlock);
@@ -341,6 +439,46 @@ var connectToPeers = (newPeers) => {
     });
 };
 
+//teamTx
+//
+var handleTxResponse = (message) => {
+    //재호씨가 보내주신 코드 이용했습니다.https://gist.github.com/nakov/1dcbe26988e18f7a4d013b65d8803ffc
+    var receivedTx = JSON.parse(message.data).sort((t1, t2) => (t1.index - t2.index));
+    /*
+        JSON.parse() 는 String을 Object로 변환하는 데 사용됩니다. 
+        JSON.stringify() 는 Object를 String으로 변환하는 데 사용됩니다
+    */
+    var receivedTx_A = JSON.stringify(receivedTx[0]);
+    receivedTx_A = JSON.parse(receivedTx_A);
+
+    var msgHash_A = receivedTx_A['msgHash'];
+    var Sig_A = receivedTx_A['Sig'];
+
+    //확인용
+    //console.log(`msgHash_A: ${msgHash_A}`);
+    //console.log(`Sig_A: ${Sig_A}`);
+    //console.log(receivedTx_A);
+    //console.log(receivedTx_A['msgHash']);
+
+    //?코드 이해해서 옮긴거긴 한데 이 부분에 pubkey사용 안하고 어떻게 sig를 풀었지???
+    let hexToDecimal = (x) => ec.keyFromPrivate(x, "hex").getPrivate().toString(10);
+    let pubKeyRecovered = ec.recoverPubKey(
+    hexToDecimal(msgHash_A), Sig_A, Sig_A.recoveryParam, "hex");
+    let validSig = ec.verify(msgHash_A, Sig_A, pubKeyRecovered);
+    if (validSig == true) {
+        //이게아니라
+        //addTransaction(receivedTx_A);     
+        //이거겠지?
+        addTransaction(receivedTx);
+
+        console.log('valid transaction , New Transaction received.')
+    }
+}
+
+//
+
+
+
 var handleBlockchainResponse = (message) => {
     var receivedBlocks = JSON.parse(message.data).sort((b1, b2) => (b1.index - b2.index));
     var latestBlockReceived = receivedBlocks[receivedBlocks.length - 1];
@@ -389,6 +527,8 @@ var isValidChain = (blockchainToValidate) => {
 };
 
 var getLatestBlock = () => blockchain[blockchain.length - 1];
+var getLatestTx = () => TransactionPool[TransactionPool.length - 1];
+
 var queryChainLengthMsg = () => ({'type': MessageType.QUERY_LATEST});
 var queryAllMsg = () => ({'type': MessageType.QUERY_ALL});
 var responseChainMsg = () =>({
@@ -398,6 +538,20 @@ var responseLatestMsg = () => ({
     'type': MessageType.RESPONSE_BLOCKCHAIN,
     'data': JSON.stringify([getLatestBlock()])
 });
+
+/* 
+ *  message reqest for new transaction occured. 
+ *  teamTx
+*/
+var responseTxMsg = () => ({
+
+    'type': MessageType.RESPONSE_Transaction,
+    'data': JSON.stringify([getLatestTx()])
+
+})
+
+
+
 
 var write = (ws, message) => ws.send(JSON.stringify(message));
 var broadcast = (message) => sockets.forEach(socket => write(socket, message));
