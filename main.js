@@ -40,18 +40,29 @@ class Block {   // 수정 요망
 // teamb
 class Block {
 
-    constructor(index, previousHash, timestamp, data, hash, nonce, targetvalue) {
+    constructor(index, previousHash, timestamp, data, hash, targetvalue) {
 
         this.index = index;
         this.previousHash = previousHash.toString();
         this.timestamp = timestamp;
         this.data = data;
         this.hash = hash.toString();
-        this.nonce = nonce;
+        this.nonce = 0;
         this.targetvalue = targetvalue;
         this.tx_set = [];
-        this.merkletree = [];
         this.root = "";
+    }
+}
+
+//teamb
+class Merkle_Tree {
+
+    constructor (){
+
+        this.index = 0;
+        this.node_values = [];
+        this.root = "";
+
     }
 }
 
@@ -101,9 +112,8 @@ var memory_pool = [{ "sender": "a", "reciver": "b", "amount": 100 },
     { "sender": "baa", "reciver": "c", "amount": 150 }, 
     { "sender": "ab", "reciver": "c", "amount": 150 }]; // memory_pool add
 
-
-
 var sockets = [];
+
 var MessageType = {
     QUERY_LATEST: 0,
     QUERY_ALL: 1,
@@ -118,6 +128,7 @@ var getGenesisBlock = () => {
 
 var memPool = [];
 var UTXOsets = [];
+var mk_db = []; // teamb
 
 var initMemPool = () => {
     memPool.push({transactionHash:"2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",in_counter:1,inputs:
@@ -425,7 +436,7 @@ var generateNextBlock = (blockData, m_pool) => {
     
     var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp, blockData);
 
-    var new_block = new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash, 0, "0AAA");
+    var new_block = new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash, "0AAA");
 
     var transaction_num = 0;
 
@@ -448,7 +459,7 @@ var generateNextBlock = (blockData, m_pool) => {
 
     ProofofWork(new_block);
     
-   // console.log(JSON.stringify(memory_pool));
+    console.log(JSON.stringify(memory_pool));
 
     return new_block;
 
@@ -458,30 +469,19 @@ var generateNextBlock = (blockData, m_pool) => {
 var makemerkletree = (block, block_Transactions) => { // make merkle tree node's value 상연아!!
 
     var index_s = 0;
-
     var index_e = 0;
-
-    /*var data = block_Transactions[1];
+    var mk_vals = new Merkle_Tree();
+  
+    mk_vals.index = block.index;
     
-    var strinaaaaa = JSON.stringify(data);
+    for( var i in block_Transactions){
 
-    console.log(data);
+        var tx_st = JSON.stringify(block_Transactions[i]);
+        var h_val = CryptoJS.SHA256(tx_st).toString();
+        mk_vals.node_values.push(h_val);
 
-    console.log(strinaaaaa);
-
-    console.log((block_Transactions[1]).join());*/
-
-    for (var i in block_Transactions) {
-
-        var data = block_Transactions[i];
-
-        var transaction_string = JSON.stringify(data);
-
-        var hash_value = CryptoJS.SHA256(transaction_string).toString();
-        console.log(hash_value);
-        block.merkletree.push(hash_value);
     }
-    
+
     index_s = 0;
     index_e = block_Transactions.length;
 
@@ -489,12 +489,15 @@ var makemerkletree = (block, block_Transactions) => { // make merkle tree node's
 
         for( var i = index_s; i < index_e; i=i+2){
             if(i + 1 < index_e){
-                var hash_value = CryptoJS.SHA256(block.merkletree[i] + block.merkletree[i + 1]).toString();
-                block.merkletree.push(hash_value);
+            
+                var h_val = CryptoJS.SHA256(mk_vals.node_values[i] + mk_vals.node_values[i+1]).toString();
+                mk_vals.node_values.push(h_val);
+
             }
             else{
-                var hash_value = CryptoJS.SHA256(block.merkletree[i]).toString();
-                block.merkletree.push(hash_value);
+
+                var h_val = CryptoJS.SHA256(mk_vals.node_values[i]).toString();
+                mk_vals.node_values.push(h_val);
             }
         }
 
@@ -502,33 +505,32 @@ var makemerkletree = (block, block_Transactions) => { // make merkle tree node's
       //  console.log(index_e);
 
         index_s = index_e;
-        index_e = block.merkletree.length;
-
+        index_e = mk_vals.node_values.length;
     }
+    block.root =  mk_vals.node_values[index_s];
 
-    block.root = block.merkletree[index_s];
+    console.log(mk_vals.node_values);
 }
 
 
-var ProofofWork = (block) => { // Proof of Work 완료 상연아!!
+var ProofofWork = (block) => { // Proof of Work 완료
 
-    var hashvalue;
+    var h_val;
     while(1){
 
-        hashvalue = CryptoJS.SHA256(block.root + (block.index).toString() + block.data + (block.nonce).toString()).toString();
+        h_val = CryptoJS.SHA256(block.root + (block.index).toString() + block.data + (block.nonce).toString()).toString();
 
-        var value_1 = hashvalue.substring(0,3);
-
-        if(value_1 < block.targetvalue) break;
+        var res_val = h_val.substring(0,3);
+        
+        if(res_val < block.targetvalue) break;
 
         block.nonce += 1;
 
+        console.log(res_val);
+        console.log(block.targetvalue);
     }
 
 }
-
-
-
 
 
 //teamTx
