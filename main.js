@@ -21,6 +21,7 @@ var http_port = process.env.HTTP_PORT || 3001;
 var p2p_port = process.env.P2P_PORT || 6001;
 var initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
 
+/*
 class Block {   // 수정 요망
     //constructor(index, blockHash, previousHash, merkleRoot, timestamp, difficulty, nonce, tx_counter, [transactions]) {
     constructor(index, previousHash, timestamp, data, hash, difficulty, nonce) {
@@ -32,6 +33,25 @@ class Block {   // 수정 요망
         // added data field
         this.difficulty = difficulty;
         this.nonce = nonce;
+    }
+}
+*/
+
+// teamb
+class Block {
+
+    constructor(index, previousHash, timestamp, data, hash, nonce, targetvalue) {
+
+        this.index = index;
+        this.previousHash = previousHash.toString();
+        this.timestamp = timestamp;
+        this.data = data;
+        this.hash = hash.toString();
+        this.nonce = nonce;
+        this.targetvalue = targetvalue;
+        this.tx_set = [];
+        this.merkletree = [];
+        this.root = "";
     }
 }
 
@@ -74,7 +94,14 @@ class Transaction {
 }
 
 
- 
+
+// 상연아!!
+var memory_pool = [{ "sender": "a", "reciver": "b", "amount": 100 }, 
+    { "sender": "b", "reciver": "c", "amount": 150 }, 
+    { "sender": "baa", "reciver": "c", "amount": 150 }, 
+    { "sender": "ab", "reciver": "c", "amount": 150 }]; // memory_pool add
+
+
 
 var sockets = [];
 var MessageType = {
@@ -115,6 +142,27 @@ var initHttpServer = () => {
 
     app.get('/blocks', (req, res) => res.send(JSON.stringify(blockchain)));
     app.get('/mempool', (req, res) => res.send(JSON.stringify(memPool)));
+    
+    app.post('/setGenesis', (req, res) => {  // gensis block setting 상연아!!
+        
+        var a = blockchain.length;
+        console.log(JSON.stringify(a));
+        if(a != 0) console.log("gensis block exists");
+        else{
+            var currentTimestamp = new Date().getTime() / 1000;
+            
+            var new_block = new Block(a, "0", 0, req.body.data, "", 0, "0AAA");
+
+            var blockHash = calculateHashForBlock(new_block);
+
+            new_block.hash = blockHash.toString();
+            
+            blockchain.push(new_block);
+        }
+        res.send(JSON.stringify(blockchain)); 
+    }); 
+
+    /*
     app.post('/mineBlock', (req, res) => {
         var newBlock = generateNextBlock(req.body.data);
         addBlock(newBlock);
@@ -122,6 +170,24 @@ var initHttpServer = () => {
         console.log('block added: ' + JSON.stringify(newBlock));
         res.send();
     });
+    */
+    app.post('/mineBlock', (req, res) => { // mining block 상연아!!
+
+        /*memory_pool = [{"sender" : "a","reciver" : "b","amount" : 100}];   // temporarily set memory pool
+        memory_pool.push({"sender" : "b","reciver" : "c","amount" : 150});*/
+
+        var newBlock = generateNextBlock(req.body.data, memory_pool); // Using req.body.data for labeling block
+
+        console.log(JSON.stringify(memory_pool));
+
+        addBlock(newBlock);
+        broadcast(responseLatestMsg());
+        console.log('block added: ' + JSON.stringify(newBlock));
+        res.send();
+
+    });
+
+    
     app.get('/peers', (req, res) => {
         res.send(sockets.map(s => s._socket.remoteAddress + ':' + s._socket.remotePort));
     });
@@ -335,7 +401,7 @@ var initErrorHandler = (ws) => {
     ws.on('error', () => closeConnection(ws));
 };
 
-
+/*
 var generateNextBlock = (blockData) => {
     var previousBlock = getLatestBlock();
     var nextIndex = previousBlock.index + 1;
@@ -344,6 +410,126 @@ var generateNextBlock = (blockData) => {
     //return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash);
     return new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash, "0547e56d1e434eca972617295fe28c69a4e32b259009c261952130078608371ac", 34583);
 };
+*/
+
+// 블록 생성 부분 // 상연아 !!
+var generateNextBlock = (blockData, m_pool) => {
+
+    m_pool.unshift({"sender" : "X", "reieciver" : "A", "amount" : 10}); // add coinbase
+
+    var previousBlock = getLatestBlock();
+
+    var nextIndex = previousBlock.index + 1;
+
+    var nextTimestamp = new Date().getTime() / 1000;
+    
+    var nextHash = calculateHash(nextIndex, previousBlock.hash, nextTimestamp, blockData);
+
+    var new_block = new Block(nextIndex, previousBlock.hash, nextTimestamp, blockData, nextHash, 0, "0AAA");
+
+    var transaction_num = 0;
+
+    var block_transactions = [];
+
+    while(transaction_num <= 4 && m_pool.length != 0) { // assume block size is 3 transaction
+
+        transaction_num += 1;
+
+        var new_transaction = m_pool.shift();
+
+        block_transactions.push(new_transaction);
+
+    }
+
+
+    new_block.tx_set = block_transactions;
+
+    makemerkletree(new_block, new_block.tx_set);
+
+    ProofofWork(new_block);
+    
+   // console.log(JSON.stringify(memory_pool));
+
+    return new_block;
+
+};
+
+
+var makemerkletree = (block, block_Transactions) => { // make merkle tree node's value 상연아!!
+
+    var index_s = 0;
+
+    var index_e = 0;
+
+    /*var data = block_Transactions[1];
+    
+    var strinaaaaa = JSON.stringify(data);
+
+    console.log(data);
+
+    console.log(strinaaaaa);
+
+    console.log((block_Transactions[1]).join());*/
+
+    for (var i in block_Transactions) {
+
+        var data = block_Transactions[i];
+
+        var transaction_string = JSON.stringify(data);
+
+        var hash_value = CryptoJS.SHA256(transaction_string).toString();
+        console.log(hash_value);
+        block.merkletree.push(hash_value);
+    }
+    
+    index_s = 0;
+    index_e = block_Transactions.length;
+
+    while(index_s + 1 != index_e){
+
+        for( var i = index_s; i < index_e; i=i+2){
+            if(i + 1 < index_e){
+                var hash_value = CryptoJS.SHA256(block.merkletree[i] + block.merkletree[i + 1]).toString();
+                block.merkletree.push(hash_value);
+            }
+            else{
+                var hash_value = CryptoJS.SHA256(block.merkletree[i]).toString();
+                block.merkletree.push(hash_value);
+            }
+        }
+
+      //  console.log(index_s);
+      //  console.log(index_e);
+
+        index_s = index_e;
+        index_e = block.merkletree.length;
+
+    }
+
+    block.root = block.merkletree[index_s];
+}
+
+
+var ProofofWork = (block) => { // Proof of Work 완료 상연아!!
+
+    var hashvalue;
+    while(1){
+
+        hashvalue = CryptoJS.SHA256(block.root + (block.index).toString() + block.data + (block.nonce).toString()).toString();
+
+        var value_1 = hashvalue.substring(0,3);
+
+        if(value_1 < block.targetvalue) break;
+
+        block.nonce += 1;
+
+    }
+
+}
+
+
+
+
 
 //teamTx
 
@@ -511,6 +697,7 @@ var replaceChain = (newBlocks) => {
     }
 };
 
+/*
 var isValidChain = (blockchainToValidate) => {
     if (JSON.stringify(blockchainToValidate[0]) !== JSON.stringify(getGenesisBlock())) {
         return false;
@@ -524,7 +711,24 @@ var isValidChain = (blockchainToValidate) => {
         }
     }
     return true;
+};*/
+
+var isValidChain = (blockchainToValidate) => { // Optimazation
+    if (JSON.stringify(blockchainToValidate[0]) !== JSON.stringify(getGenesisBlock())) { // 상연아!!!
+        return false;
+    }
+    var tempBlocks = [blockchainToValidate[0]];
+    for (var i = 1; i < blockchainToValidate.length; i++) {
+        if (isValidNewBlock(blockchainToValidate[i], tempBlocks[i - 1])) {
+            tempBlocks.push(blockchainToValidate[i]);
+        } else {
+            return false;
+        }
+    }
+    return true;
 };
+
+
 
 var getLatestBlock = () => blockchain[blockchain.length - 1];
 var getLatestTx = () => TransactionPool[TransactionPool.length - 1];
