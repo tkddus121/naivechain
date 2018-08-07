@@ -267,7 +267,7 @@ var isValidTransaction = (newTransaction) => {
     var sum = 0;
     for(var i=0; i<newTransaction.out_counter; i++ )
         sum += newTransaction.outputs[i].value;    
-    if(sum < 0 || sum>21000000){
+    if(sum < 0 || sum > 21000000){
         console.log("Sum of outputs must be 0 ~ 21,000,000" + sum)
         return false;
     }
