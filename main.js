@@ -90,7 +90,7 @@ class Transaction {
 
 
 
-// 상연아!!
+// 상연아!! this will be decayed.
 var memory_pool = [{ "sender": "a", "reciver": "b", "amount": 100 }, 
     { "sender": "b", "reciver": "c", "amount": 150 }, 
     { "sender": "baa", "reciver": "c", "amount": 150 }, 
@@ -159,9 +159,9 @@ var initHttpServer = () => {
 
     app.post('/mineBlock', (req, res) => { // mining block 상연아!!
 
-        var newBlock = generateNextBlock(req.body.data, memory_pool); // Using req.body.data for labeling block
+        var newBlock = generateNextBlock(req.body.data, memPool); // Using req.body.data for labeling block
 
-        console.log(JSON.stringify(memory_pool));
+        console.log(JSON.stringify(memPool));
 
         addBlock(newBlock);
         broadcast(responseLatestMsg());
@@ -180,7 +180,7 @@ var initHttpServer = () => {
     });
 
     //teamTx
-   app.get('/transactions', (req, res) => res.send(JSON.stringify(TransactionPool)));
+   app.get('/transactions', (req, res) => res.send(JSON.stringify(memPool)));
     app.post('/newTransaction', (req, res) => {
         var newSender = req.body.sender;
         var newReceiver = req.body.receiver;
@@ -418,7 +418,7 @@ var generateNextBlock = (blockData, m_pool) => {
 
     ProofofWork(new_block);
     
-    console.log(JSON.stringify(memory_pool));
+    console.log(JSON.stringify(memPool));
 
     return new_block;
 
@@ -514,7 +514,7 @@ var addBlock = (newBlock) => {
 //teamTx
 var addTransaction = (newTransaction) => {
     if( isValidTransaction(newTransaction) ){
-        TransactionPool.push(newTransaction);
+        memPool.push(newTransaction);
     }
 }
 
@@ -693,7 +693,7 @@ var isValidChain = (blockchainToValidate) => { // Optimazation
 
 
 var getLatestBlock = () => blockchain[blockchain.length - 1];
-var getLatestTx = () => TransactionPool[TransactionPool.length - 1];
+var getLatestTx = () => memPool[memPool.length - 1];
 
 var queryChainLengthMsg = () => ({'type': MessageType.QUERY_LATEST});
 var queryAllMsg = () => ({'type': MessageType.QUERY_ALL});
