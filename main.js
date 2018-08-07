@@ -21,22 +21,6 @@ var http_port = process.env.HTTP_PORT || 3001;
 var p2p_port = process.env.P2P_PORT || 6001;
 var initialPeers = process.env.PEERS ? process.env.PEERS.split(',') : [];
 
-/*
-class Block {   // 수정 요망
-    //constructor(index, blockHash, previousHash, merkleRoot, timestamp, difficulty, nonce, tx_counter, [transactions]) {
-    constructor(index, previousHash, timestamp, data, hash, difficulty, nonce) {
-        this.index = index;
-        this.previousHash = previousHash.toString();
-        this.timestamp = timestamp;
-        this.data = data;
-        this.hash = hash.toString();
-        // added data field
-        this.difficulty = difficulty;
-        this.nonce = nonce;
-    }
-}
-*/
-
 // teamb
 class Block {
 
@@ -66,7 +50,7 @@ class Merkle_Tree {
     }
 }
 
-
+//it will be decayed.
 var TransactionPool = new Array();
 
 class Transaction {
@@ -173,19 +157,7 @@ var initHttpServer = () => {
         res.send(JSON.stringify(blockchain)); 
     }); 
 
-    /*
-    app.post('/mineBlock', (req, res) => {
-        var newBlock = generateNextBlock(req.body.data);
-        addBlock(newBlock);
-        broadcast(responseLatestMsg());
-        console.log('block added: ' + JSON.stringify(newBlock));
-        res.send();
-    });
-    */
     app.post('/mineBlock', (req, res) => { // mining block 상연아!!
-
-        /*memory_pool = [{"sender" : "a","reciver" : "b","amount" : 100}];   // temporarily set memory pool
-        memory_pool.push({"sender" : "b","reciver" : "c","amount" : 150});*/
 
         var newBlock = generateNextBlock(req.body.data, memory_pool); // Using req.body.data for labeling block
 
@@ -207,21 +179,6 @@ var initHttpServer = () => {
         res.send();
     });
 
-    /*
-    app.post('/newTransaction', (req, res) => {
-        var tmp = isValidTransaction(req.body);
-        if(tmp){
-            // add new transaction to memPool
-            addToMempool(req.body);
-            addToUTXO(req.body);
-            res.send("Valid Transaction");
-        }
-        else{
-            res.send("Invalid Transction");
-        }
-    });
-
-*/
     //teamTx
    app.get('/transactions', (req, res) => res.send(JSON.stringify(TransactionPool)));
     app.post('/newTransaction', (req, res) => {
@@ -287,14 +244,16 @@ var addToUTXO = (newTransaction) => {
 }
 var isValidTransaction = (newTransaction) => {
     // check if every data field are non-empty
-    if (newTransaction.transactionHash == null || // 나중에 제거하기
+    /*
+     *  after develope utxo, it will required
+     *
+    if ( // 나중에 제거하기
         newTransaction.in_counter == null || 
-        newTransaction.inputs == null || 
-        newTransaction.out_counter == null ||
-         newTransaction.outputs == null) {
-        console.log("Invalid transacion format");
+        newTransaction.out_counter == null  ) {
+        console.log("Invalid transacion format" + newTransaction.in_counter + newTransaction.out_counter);
         return false;
     }
+*/
 
     // check if is there any negative outputs
     for(var i=0; i<newTransaction.out_counter; i++ ){
@@ -308,8 +267,8 @@ var isValidTransaction = (newTransaction) => {
     var sum = 0;
     for(var i=0; i<newTransaction.out_counter; i++ )
         sum += newTransaction.outputs[i].value;    
-    if(sum<=0||sum>21000000){
-        console.log("Sum of outputs must be 0 ~ 21,000,000")
+    if(sum < 0 || sum>21000000){
+        console.log("Sum of outputs must be 0 ~ 21,000,000" + sum)
         return false;
     }
 
@@ -554,9 +513,9 @@ var addBlock = (newBlock) => {
 
 //teamTx
 var addTransaction = (newTransaction) => {
-    //if( isValidNewTransaction(newTransaction) ){
-    TransactionPool.push(newTransaction);
-    //}
+    if( isValidTransaction(newTransaction) ){
+        TransactionPool.push(newTransaction);
+    }
 }
 
 var isValidNewBlock = (newBlock, previousBlock) => {
@@ -658,8 +617,10 @@ var handleTxResponse = (message) => {
         //이거겠지?
         addTransaction(receivedTx);
 
-        console.log('valid transaction , New Transaction received.')
+        console.log('valid transaction , New Transaction received.');
     }
+    else
+        console.log('invalid Transaction , invalid signature.');
 }
 
 //
