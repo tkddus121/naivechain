@@ -525,9 +525,6 @@ var ProofofWork = (block) => { // Proof of Work 완료
         if(res_val < block.targetvalue) break;
 
         block.nonce += 1;
-
-        console.log(res_val);
-        console.log(block.targetvalue);
     }
 
 }
@@ -541,17 +538,18 @@ var generateNewTransaction = (sender, receiver, amount, pubKey, in_counter, out_
 };
 
 var calculateHashForBlock = (block) => {
-    return calculateHash(block.index, block.previousHash, block.timestamp, block.data, block.difficulty, block.nonce);
+    return calculateHash(block.index, block.previousHash, block.timestamp, block.data);
 };
 
 var calculateHash = (index, previousHash, timestamp, data, difficulty, nonce) => {
-    return CryptoJS.SHA256(index + previousHash + timestamp + data + difficulty + nonce).toString();
+    return CryptoJS.SHA256(index + previousHash + timestamp + data).toString();
 };
 
 var addBlock = (newBlock) => {
     if (isValidNewBlock(newBlock, getLatestBlock())) {
         blockchain.push(newBlock);
     }
+
 };
 
 //teamTx
@@ -565,10 +563,11 @@ var isValidNewBlock = (newBlock, previousBlock) => {
     console.log(newBlock);
     // check if standard format
     if(newBlock.index == null || 
-        newBlock.previousBlock == null ||
+        newBlock.previousHash == null ||
         newBlock.timestamp == null ||
         newBlock.data == null ||
-        newBlock.difficulty == null ||
+        newBlock.hash == null ||
+        newBlock.targetvalue == null ||
         newBlock.nonce == null){
         console.log('invalid block format');
         return false;
