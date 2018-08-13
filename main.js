@@ -5,7 +5,6 @@ var bodyParser = require('body-parser');
 var WebSocket = require("ws");
 
 //teamTx
-
 let elliptic = require('elliptic');
 let sha3 = require('js-sha3');
 let ec = new elliptic.ec('secp256k1');
@@ -15,6 +14,9 @@ let privKey = keyPair.getPrivate("hex");
 let pubKey = keyPair.getPublic();
 
 let local_host = 3001;
+
+//
+
 
 var http_port = process.env.HTTP_PORT || 3001;
 var p2p_port = process.env.P2P_PORT || 6001;
@@ -49,7 +51,8 @@ class Merkle_Tree {
     }
 }
 
-
+//teamTx
+//Tx input.
 class Vin {
     constructor(tx_id, index, unlock) {
         this.tx_id = tx_id; //transaction hash
@@ -57,6 +60,9 @@ class Vin {
         this.unlock = unlock;
     }
 }
+
+//teamTx
+//Tx output.
 class Vout {
     constructor(value, lock) {
         this.value = value;     //amount
@@ -64,6 +70,8 @@ class Vout {
     }
 }
 
+//teamTx
+//Tx Data Structure
 class Transaction {
     constructor(sender, value, pubKey, in_counter, out_counter, vin, vout) {   // 수정 요망
         var SumString = []
@@ -87,6 +95,8 @@ var A = [];
 A.push(new Vout(10, 3001));
 var coinBaseTx = new Transaction(0, 0, pubKey, 0, 1, {}, A);
 
+//teamTx
+//UTXO Data Structure. it contains txid, index, address, amount.
 class UTXO {
     constructor(txOutid, index, address, amount) {
         this.txOutid = txOutid;
@@ -99,6 +109,8 @@ class UTXO {
 
 var sockets = [];
 
+//teamTx
+//added RESPONSE_Transaction.
 var MessageType = {
     QUERY_LATEST: 0,
     QUERY_ALL: 1,
@@ -111,6 +123,8 @@ var getGenesisBlock = () => {
     return new Block(0, "0", 1465154705, "my genesis block!!", "816534932c2b7154836da6afc367695e6337db8a921823784c14378abed4f7d7", "04e940487dfe77385a882ca3e6fee5bb8e621ae1c891f44282dfa29d5ab161e6", 1234);
 };
 
+//teamTx
+//new arrays memPool, MyUTXOsets, UTXOsets.
 var memPool = [];
 var MyUTXOsets = [];
 var UTXOsets = [];
@@ -124,8 +138,8 @@ var initHttpServer = () => {
 
     app.get('/blocks', (req, res) => res.send(JSON.stringify(blockchain)));
 
+    //teamTx
     app.get('/UTXOs', (req, res) => res.send(JSON.stringify(UTXOsets)));
-    //동환0811
     app.get('/myUTXOs', (req, res) => res.send(JSON.stringify(MyUTXOsets)));
 
     app.post('/setGenesis', (req, res) => {  
@@ -168,6 +182,8 @@ var initHttpServer = () => {
         res.send();
     });
 
+    //teamTx
+    //transaction command.
     app.get('/transactions', (req, res) => res.send(JSON.stringify(memPool)));
     app.post('/newTransaction', (req, res) => {
         var newSender = req.body.sender;
@@ -211,13 +227,14 @@ var initHttpServer = () => {
     app.listen(http_port, () => console.log('Listening http on port: ' + http_port));
 };
 
-//0811동환
+//teamTx
 var TxToUTXO = (txOut_id, index, address, amount) => {
     var UTXO_tmp = new UTXO(txOut_id, index, address, amount);
 
     return UTXO_tmp;
 }
 
+//teamTx
 // add UTXOs to UTXOset when block is added.
 var addToUTXOset = (newBlock) => {
 
@@ -234,6 +251,8 @@ var addToUTXOset = (newBlock) => {
         }
     }
 }
+//teamTx
+// pop from memPool when block is added.
 var popFromMempool = (newBlock, m_pool) =>{
 
     var len = newBlock.tx_set.length;
@@ -369,6 +388,8 @@ var initErrorHandler = (ws) => {
     ws.on('error', () => closeConnection(ws));
 };
 
+//teamTx
+//When Transaction is generated, map UTXOs to Tx_input.
 var UTXOtoInput = (newTransaction, sender, receiver, value, inputs, outputs, in_counter, out_counter) => {
     //sender,value,pubkey
     var myutxolen = MyUTXOsets.length;
@@ -539,7 +560,7 @@ var ProofofWork = (block) => { // Proof of Work 완료
 
 
 //teamTx
-
+//generate new transaction.
 var generateNewTransaction = (sender, receiver, amount, pubKey, in_counter, out_counter, transactionHash, inputs, outputs) => {
     var aTransaction = new Transaction(sender, receiver, amount, pubKey, in_counter, out_counter, transactionHash, inputs, outputs); // TxHash, input_counter,inputs, output_counter, outputs
     return aTransaction;
@@ -556,6 +577,8 @@ var calculateHash = (index, previousHash, timestamp, data, difficulty, nonce) =>
 var addBlock = (newBlock) => {
     if (isValidNewBlock(newBlock, getLatestBlock())) {
         //we have to add utxo set Txs in block.
+        //teamTx
+        //When block added, tranactions in block have to added UTXO set.
         addToUTXOset(newBlock);    
         popFromMempool(newBlock,memPool);
         blockchain.push(newBlock);
@@ -632,6 +655,7 @@ var connectToPeers = (newPeers) => {
 
 //teamTx
 //
+//Tx message handling.
 var handleTxResponse = (message) => {
     var receivedTx = JSON.parse(message.data).sort((t1, t2) => (t1.index - t2.index));
 
@@ -654,6 +678,8 @@ var handleBlockchainResponse = (message) => {
         if (latestBlockHeld.hash === latestBlockReceived.previousHash) {
             console.log("We can append the received block to our chain");
            // blockchain.push(latestBlockReceived);
+            //teamTx
+            //received block message will handle in addBlock function.
             addBlock(latestBlockReceived);
             broadcast(responseLatestMsg());
         } else if (receivedBlocks.length === 1) {
@@ -698,6 +724,7 @@ var isValidChain = (blockchainToValidate) => { // Optimazation
 
 
 var getLatestBlock = () => blockchain[blockchain.length - 1];
+//teamTx
 var getLatestTx = () => memPool[memPool.length - 1];
 
 var queryChainLengthMsg = () => ({ 'type': MessageType.QUERY_LATEST });
